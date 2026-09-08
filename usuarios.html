@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Usuários - EllencoCheck</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+<header class="bg-[#113A6E] text-white px-6 py-4 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold">Usuários</h1>
+    <p class="text-sm opacity-80">Gerenciamento de usuários do EllencoCheck</p>
+  </div>
+  <a href="./index.html" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg">Voltar</a>
+</header>
+
+<main class="max-w-6xl mx-auto p-6">
+  <section class="bg-white rounded-2xl shadow-sm p-6 mb-6">
+    <h2 class="font-bold text-lg mb-4">Cadastrar usuário</h2>
+    <form id="formUsuario" class="grid md:grid-cols-4 gap-4">
+      <input id="nome" required placeholder="Nome completo" class="border rounded-lg px-4 py-3">
+      <input id="email" required type="email" placeholder="E-mail" class="border rounded-lg px-4 py-3">
+      <input id="senha" required minlength="6" type="password" placeholder="Senha (mín. 6)" class="border rounded-lg px-4 py-3">
+      <button class="bg-[#113A6E] text-white rounded-lg font-bold px-4 py-3 hover:opacity-90">Cadastrar</button>
+    </form>
+    <p id="mensagem" class="mt-4 text-sm hidden"></p>
+  </section>
+
+  <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div class="p-6 border-b flex items-center justify-between">
+      <h2 class="font-bold text-lg">Usuários cadastrados</h2>
+      <button onclick="carregarUsuarios()" class="border rounded-lg px-4 py-2 hover:bg-slate-50">Atualizar</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50">
+          <tr>
+            <th class="text-left px-6 py-4">ID</th>
+            <th class="text-left px-6 py-4">Nome</th>
+            <th class="text-left px-6 py-4">E-mail</th>
+            <th class="text-left px-6 py-4">Status</th>
+            <th class="text-right px-6 py-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="lista"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = "/api";
+
+function mostrar(msg, erro=false) {
+  const el = document.getElementById("mensagem");
+  el.textContent = msg;
+  el.className = "mt-4 text-sm " + (erro ? "text-red-600" : "text-emerald-600");
+}
+
+async function carregarUsuarios() {
+  const res = await fetch(`${API}/usuarios`);
+  if (res.status === 401) {
+    location.href = "./loginecadastro.html";
+    return;
+  }
+  const usuarios = await res.json();
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+  usuarios.forEach(u => {
+    const tr = document.createElement("tr");
+    tr.className = "border-t";
+    tr.innerHTML = `
+      <td class="px-6 py-4">${u.id}</td>
+      <td class="px-6 py-4 font-medium">${escapeHtml(u.nome)}</td>
+      <td class="px-6 py-4">${escapeHtml(u.email)}</td>
+      <td class="px-6 py-4">${u.ativo ? "Ativo" : "Inativo"}</td>
+      <td class="px-6 py-4 text-right">
+        <button onclick="editar(${u.id}, '${escapeJs(u.nome)}', '${escapeJs(u.email)}', ${u.ativo})"
+          class="text-[#113A6E] font-bold mr-3">Editar</button>
+        <button onclick="excluir(${u.id})" class="text-red-600 font-bold">Desativar</button>
+      </td>`;
+    lista.appendChild(tr);
+  });
+}
+
+async function cadastrar(e) {
+  e.preventDefault();
+  const dados = {
+    nome: document.getElementById("nome").value,
+    email: document.getElementById("email").value,
+    senha: document.getElementById("senha").value
+  };
+  const res = await fetch(`${API}/usuarios`, {
+    method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(dados)
+  });
+  const data = await res.json();
+  if (!res.ok) return mostrar(data.erro || data.message || "Erro ao cadastrar.", true);
+  mostrar("Usuário cadastrado com sucesso!");
+  e.target.reset();
+  carregarUsuarios();
+}
+
+async function editar(id, nomeAtual, emailAtual, ativoAtual) {
+  const nome = prompt("Nome:", nomeAtual);
+  if (nome === null) return;
+  const email = prompt("E-mail:", emailAtual);
+  if (email === null) return;
+  const senha = prompt("Nova senha (deixe vazio para manter):", "");
+  if (senha === null) return;
+
+  const res = await fetch(`${API}/usuarios/${id}`, {
+    method:"PUT", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({nome,email,senha,ativo:ativoAtual})
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(data.erro || "Erro ao atualizar.");
+  carregarUsuarios();
+}
+
+async function excluir(id) {
+  if (!confirm("Desativar este usuário?")) return;
+  const res = await fetch(`${API}/usuarios/${id}`, {method:"DELETE"});
+  const data = await res.json();
+  if (!res.ok) return alert(data.erro || "Erro ao desativar.");
+  carregarUsuarios();
+}
+
+function escapeHtml(v) {
+  return String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function escapeJs(v) {
+  return String(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g," ");
+}
+
+document.getElementById("formUsuario").addEventListener("submit", cadastrar);
+carregarUsuarios();
+</script>
+</body>
+</html>
